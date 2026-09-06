@@ -1,9 +1,17 @@
 import { CaseRecord, CaseEvent, TurnResult, AgoraSessionInfo } from "../types/index.js";
 
-// Automatically use current origin or localhost:5000 if running from standalone Vite dev port
-const BASE_URL = typeof window !== "undefined" && (window.location.port === "5173" || window.location.port === "3000")
-  ? "" // Vite proxy forwards /api to http://127.0.0.1:5000
-  : "";
+// Automatically use VITE_API_URL, VITE_API_BASE_URL, or current origin
+const getBaseUrl = (): string => {
+  if (typeof window !== "undefined") {
+    const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL;
+    if (envUrl && typeof envUrl === "string" && envUrl.trim()) {
+      return envUrl.trim().replace(/\/+$/, "");
+    }
+  }
+  return "";
+};
+
+const BASE_URL = getBaseUrl();
 
 export const api = {
   async getHealth() {
@@ -30,7 +38,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ conversationId, utterance, interrupted }),
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(15000)
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: res.statusText }));

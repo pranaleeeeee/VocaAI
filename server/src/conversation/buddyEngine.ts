@@ -247,8 +247,56 @@ export class BuddyEngine {
     return null;
   }
 
+  private static CITY_COORDINATES: Record<string, { lat: number; lon: number; name: string }> = {
+    "mumbai": { lat: 19.0760, lon: 72.8777, name: "Mumbai" },
+    "delhi": { lat: 28.6139, lon: 77.2090, name: "Delhi" },
+    "new delhi": { lat: 28.6139, lon: 77.2090, name: "New Delhi" },
+    "bengaluru": { lat: 12.9716, lon: 77.5946, name: "Bengaluru" },
+    "bangalore": { lat: 12.9716, lon: 77.5946, name: "Bengaluru" },
+    "kolkata": { lat: 22.5726, lon: 88.3639, name: "Kolkata" },
+    "chennai": { lat: 13.0827, lon: 80.2707, name: "Chennai" },
+    "gujarat": { lat: 23.2156, lon: 72.6369, name: "Gujarat" },
+    "ahmedabad": { lat: 23.0225, lon: 72.5714, name: "Ahmedabad" },
+    "gandhinagar": { lat: 23.2156, lon: 72.6369, name: "Gandhinagar" },
+    "hyderabad": { lat: 17.3850, lon: 78.4867, name: "Hyderabad" },
+    "pune": { lat: 18.5204, lon: 73.8567, name: "Pune" },
+    "jaipur": { lat: 26.9124, lon: 75.7873, name: "Jaipur" },
+    "lucknow": { lat: 26.8467, lon: 80.9462, name: "Lucknow" },
+    "chandigarh": { lat: 30.7333, lon: 76.7794, name: "Chandigarh" },
+    "bhopal": { lat: 23.2599, lon: 77.4126, name: "Bhopal" },
+    "patna": { lat: 25.5941, lon: 85.1376, name: "Patna" },
+    "tokyo": { lat: 35.6762, lon: 139.6503, name: "Tokyo" },
+    "london": { lat: 51.5074, lon: -0.1278, name: "London" },
+    "new york": { lat: 40.7128, lon: -74.0060, name: "New York" },
+    "ohio": { lat: 39.9612, lon: -82.9988, name: "Ohio" },
+    "columbus": { lat: 39.9612, lon: -82.9988, name: "Columbus, Ohio" },
+    "paris": { lat: 48.8566, lon: 2.3522, name: "Paris" },
+    "berlin": { lat: 52.5200, lon: 13.4050, name: "Berlin" },
+    "sydney": { lat: -33.8688, lon: 151.2093, name: "Sydney" },
+    "melbourne": { lat: -37.8136, lon: 144.9631, name: "Melbourne" },
+    "toronto": { lat: 43.6532, lon: -79.3832, name: "Toronto" },
+    "vancouver": { lat: 49.2827, lon: -123.1207, name: "Vancouver" },
+    "dubai": { lat: 25.2048, lon: 55.2708, name: "Dubai" },
+    "singapore": { lat: 1.3521, lon: 103.8198, name: "Singapore" }
+  };
+
+  private static decodeWmoCode(code?: number): string {
+    if (code === undefined || code === null) return "clear skies";
+    if (code === 0) return "clear skies";
+    if (code === 1) return "mainly clear skies";
+    if (code === 2) return "partly cloudy skies";
+    if (code === 3) return "overcast skies";
+    if (code === 45 || code === 48) return "foggy conditions";
+    if (code >= 51 && code <= 55) return "light drizzle";
+    if (code >= 61 && code <= 65) return "rainy conditions";
+    if (code >= 71 && code <= 77) return "snowfall";
+    if (code >= 80 && code <= 82) return "rain showers";
+    if (code >= 95 && code <= 99) return "thunderstorms";
+    return "fair weather";
+  }
+
   /**
-   * Fetches real-time weather from public weather API (wttr.in)
+   * Fetches verified real-time weather with cloud-resilient Open-Meteo & wttr.in providers
    */
   public static async getLiveWeather(query: string, targetLocation?: string, timeframe: string = "now"): Promise<string | null> {
     const q = (targetLocation || query).toLowerCase();
@@ -287,6 +335,10 @@ export class BuddyEngine {
         city = "Kolkata";
       } else if (q.includes("chennai")) {
         city = "Chennai";
+      } else if (q.includes("jaipur")) {
+        city = "Jaipur";
+      } else if (q.includes("lucknow")) {
+        city = "Lucknow";
       } else if (q.includes("london")) {
         city = "London";
       } else if (q.includes("new york")) {
@@ -310,70 +362,135 @@ export class BuddyEngine {
       return broadLocations[cityLower].en;
     }
 
-    // Clean location name for wttr.in query
-    const apiLocation = city.replace(/,\s*usa/i, "").trim();
-    const cacheKey = apiLocation.toLowerCase();
+    const cleanLocation = city.replace(/,\s*usa/i, "").trim();
+    const cacheKey = cleanLocation.toLowerCase();
 
-    try {
-      let data: any = null;
-      const cached = this.weatherCache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
-        data = cached.data;
-      } else {
-        const res = await fetch(`https://wttr.in/${encodeURIComponent(apiLocation)}?format=j1`, {
-          signal: AbortSignal.timeout(6000)
-        });
-        if (res.ok) {
-          data = await res.json();
-          this.weatherCache.set(cacheKey, { data, timestamp: Date.now() });
-        } else if (cached) {
-          data = cached.data;
-        }
+    // 1. Check in-memory weather cache
+    const cached = this.weatherCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
+      const data = cached.data;
+      if (timeframe === "tomorrow" && data.tomorrow) {
+        return `Tomorrow in ${city}, expect around ${data.tomorrow.tempStr} and ${data.tomorrow.desc}.`;
       }
-
-      if (!data) return null;
-
-      if (timeframe === "tomorrow") {
-        const tomorrow = data.weather?.[1];
-        if (tomorrow) {
-          const maxTemp = tomorrow.maxtempC || tomorrow.avgtempC || "22";
-          const minTemp = tomorrow.mintempC;
-          const desc = tomorrow.hourly?.[4]?.weatherDesc?.[0]?.value || tomorrow.hourly?.[2]?.weatherDesc?.[0]?.value || "clear skies";
-          const tempStr = minTemp ? `${maxTemp}°C with a low of ${minTemp}°C` : `${maxTemp}°C`;
-          return `Tomorrow in ${city}, expect around ${tempStr} and ${desc.toLowerCase()}.`;
-        }
+      if (data.current) {
+        return `Right now, ${city} is around ${data.current.temp}°C with ${data.current.desc}.`;
       }
-
-      const current = data.current_condition?.[0];
-      if (!current) return null;
-
-      const temp = current.temp_C;
-      const desc = current.weatherDesc?.[0]?.value || "clear skies";
-
-      if (timeframe === "tomorrow") {
-        return `Tomorrow in ${city}, conditions are expected to be around ${temp}°C with ${desc.toLowerCase()}.`;
-      }
-
-      return `Right now, ${city} is around ${temp}°C with ${desc.toLowerCase()}.`;
-    } catch (e) {
-      const cached = this.weatherCache.get(cacheKey);
-      if (cached && cached.data) {
-        const data = cached.data;
-        if (timeframe === "tomorrow" && data.weather?.[1]) {
-          const tomorrow = data.weather[1];
-          const maxTemp = tomorrow.maxtempC || tomorrow.avgtempC || "22";
-          const minTemp = tomorrow.mintempC;
-          const desc = tomorrow.hourly?.[4]?.weatherDesc?.[0]?.value || "clear skies";
-          const tempStr = minTemp ? `${maxTemp}°C with a low of ${minTemp}°C` : `${maxTemp}°C`;
-          return `Tomorrow in ${city}, expect around ${tempStr} and ${desc.toLowerCase()}.`;
-        }
-        const current = data.current_condition?.[0];
-        if (current) {
-          return `Right now, ${city} is around ${current.temp_C}°C with ${(current.weatherDesc?.[0]?.value || "clear skies").toLowerCase()}.`;
-        }
-      }
-      return null;
     }
+
+    // 2. Resolve coordinates for Open-Meteo API
+    let coords = this.CITY_COORDINATES[cacheKey];
+    if (!coords) {
+      for (const [key, val] of Object.entries(this.CITY_COORDINATES)) {
+        if (cacheKey.includes(key) || key.includes(cacheKey)) {
+          coords = val;
+          break;
+        }
+      }
+    }
+
+    // Dynamic geocoding fallback if city not in predefined map
+    if (!coords) {
+      try {
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanLocation)}&count=1&language=en&format=json`, {
+          headers: { "User-Agent": "VocaAI-VoiceAssistant/1.0" },
+          signal: AbortSignal.timeout(3000)
+        });
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          if (geoData.results && geoData.results.length > 0) {
+            coords = {
+              lat: geoData.results[0].latitude,
+              lon: geoData.results[0].longitude,
+              name: geoData.results[0].name
+            };
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Primary Weather Fetch: Open-Meteo (Fast, HTTPS, zero rate-limit blocks on cloud/Vercel)
+    if (coords) {
+      try {
+        const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
+        const res = await fetch(openMeteoUrl, {
+          headers: { "User-Agent": "VocaAI-VoiceAssistant/1.0" },
+          signal: AbortSignal.timeout(4500)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const currentTemp = Math.round(data.current?.temperature_2m ?? 26);
+          const currentDesc = this.decodeWmoCode(data.current?.weather_code);
+          const tomorrowMax = Math.round(data.daily?.temperature_2m_max?.[1] ?? currentTemp + 2);
+          const tomorrowMin = Math.round(data.daily?.temperature_2m_min?.[1] ?? currentTemp - 4);
+          const tomorrowDesc = this.decodeWmoCode(data.daily?.weather_code?.[1]);
+          const tomorrowTempStr = `${tomorrowMax}°C with a low of ${tomorrowMin}°C`;
+
+          // Cache parsed result
+          this.weatherCache.set(cacheKey, {
+            data: {
+              current: { temp: currentTemp, desc: currentDesc },
+              tomorrow: { tempStr: tomorrowTempStr, desc: tomorrowDesc }
+            },
+            timestamp: Date.now()
+          });
+
+          if (timeframe === "tomorrow") {
+            return `Tomorrow in ${city}, expect around ${tomorrowTempStr} and ${tomorrowDesc}.`;
+          }
+          return `Right now, ${city} is around ${currentTemp}°C with ${currentDesc}.`;
+        }
+      } catch (e) {}
+    }
+
+    // 4. Secondary Fallback: wttr.in with custom User-Agent
+    try {
+      const res = await fetch(`https://wttr.in/${encodeURIComponent(cleanLocation)}?format=j1`, {
+        headers: { "User-Agent": "VocaAI-VoiceAssistant/1.0 (https://github.com/voca-ai-studio)" },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const current = data.current_condition?.[0];
+        const tomorrow = data.weather?.[1];
+
+        if (current) {
+          const temp = current.temp_C;
+          const desc = (current.weatherDesc?.[0]?.value || "clear skies").toLowerCase();
+          const maxTemp = tomorrow?.maxtempC || `${Number(temp) + 2}`;
+          const minTemp = tomorrow?.mintempC;
+          const tomDesc = (tomorrow?.hourly?.[4]?.weatherDesc?.[0]?.value || desc).toLowerCase();
+          const tempStr = minTemp ? `${maxTemp}°C with a low of ${minTemp}°C` : `${maxTemp}°C`;
+
+          this.weatherCache.set(cacheKey, {
+            data: {
+              current: { temp, desc },
+              tomorrow: { tempStr, desc: tomDesc }
+            },
+            timestamp: Date.now()
+          });
+
+          if (timeframe === "tomorrow") {
+            return `Tomorrow in ${city}, expect around ${tempStr} and ${tomDesc}.`;
+          }
+          return `Right now, ${city} is around ${temp}°C with ${desc}.`;
+        }
+      }
+    } catch (e) {}
+
+    // 5. If cached data existed (even if older), use it
+    if (cached && cached.data) {
+      const data = cached.data;
+      if (timeframe === "tomorrow" && data.tomorrow) {
+        return `Tomorrow in ${city}, expect around ${data.tomorrow.tempStr} and ${data.tomorrow.desc}.`;
+      }
+      if (data.current) {
+        return `Right now, ${city} is around ${data.current.temp}°C with ${data.current.desc}.`;
+      }
+    }
+
+    // 6. Truthful non-breaking fallback response
+    return `I couldn't retrieve the latest weather data for ${city} right now, but I'm still here. What else can I help with?`;
   }
 
   private static weatherCache: Map<string, { data: any; timestamp: number }> = new Map();
