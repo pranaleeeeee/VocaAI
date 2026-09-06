@@ -1,0 +1,1 @@
+export const VideoVoiceoverPage = () => null;

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocaAI Studio - Real-Time Multilingual Voice AI & Video Voiceover</title>
+  <meta name="description" content="VocaAI Studio: Real-time multilingual voice AI agent with code-switching, barge-in, safety guardrails, noise resilience, human escalation, and FFmpeg AI video voiceover.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">VocaAI Studio</h1>
+        <div class="brand-tagline">Real-Time Voice AI Agent & Video Voiceover</div>
+      </div>
+    </div>
+
+    <nav class="nav-tabs" aria-label="Main Navigation">
+      <button class="tab-btn active" data-target="view-agent" id="tabBtnAgent">
+        <span>🎙️</span> Voice AI Agent
+      </button>
+      <button class="tab-btn" data-target="view-tickets" id="tabBtnTickets">
+        <span>📋</span> Case Management
+      </button>
+      <button class="tab-btn" data-target="view-video" id="tabBtnVideo">
+        <span>🎬</span> Video Voiceover
+      </button>
+      <button class="tab-btn" data-target="view-scenarios" id="tabBtnScenarios">
+        <span>🧪</span> Scenario Lab
+      </button>
+      <button class="tab-btn" data-target="view-architecture" id="tabBtnArch">
+        <span>⚙️</span> Architecture & Settings
+      </button>
+    </nav>
+
+    <div class="nav-actions">
+      <div class="status-pill" id="backendStatusBadge">
+        <span class="pulse-dot"></span>
+        <span id="backendStatusText">Edge-TTS & FFmpeg Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Container -->
+  <main class="main-container">
+
+    <!-- VIEW 1: Voice AI Agent Console -->
+    <section id="view-agent" class="view-section active">
+      <div class="agent-grid">
+        
+        <!-- Left Side: Visualizer, Controls, and Live Transcript -->
+        <div class="call-stage-card card">
+          <div class="stage-header">
+            <div class="stage-title-wrap">
+              <h2 class="stage-title">Live Call Interaction Console</h2>
+              <span class="mode-badge badge-ready" id="agentStateBadge">Ready • Idle</span>
+            </div>
+            <div id="callTimer" style="font-family: var(--font-mono); font-size: 13px; color: var(--text-muted);">
+              00:00
+            </div>
+          </div>
+
+          <!-- Real-Time Audio Waveform Visualizer -->
+          <div class="waveform-container" id="waveformWrapper">
+            <canvas id="audioVisualizerCanvas" height="120"></canvas>
+            <div class="waveform-overlay-text" id="waveformHint">
+              Microphone Inactive • Click "Start Voice Call" or speak to begin
+            </div>
+          </div>
+
+          <!-- Live Telemetry Strip -->
+          <div class="telemetry-strip">
+            <div class="telemetry-item">
+              <div class="telemetry-label">Confidence Score</div>
+              <div class="telemetry-value" id="telemetryConfidence" style="color: #34d399;">94%</div>
+            </div>
+            <div class="telemetry-item">
+              <div class="telemetry-label">Language Mode</div>
+              <div class="telemetry-value" id="telemetryLanguage">Hinglish / Multi</div>
+            </div>
+            <div class="telemetry-item">
+              <div class="telemetry-label">Caller Stress</div>
+              <div class="telemetry-value" id="telemetryStress">Moderate</div>
+            </div>
+            <div class="telemetry-item">
+              <div class="telemetry-label">Noise Resilience</div>
+              <div class="telemetry-value" id="telemetryNoise">Filter Active</div>
+            </div>
+          </div>
+
+          <!-- Interactive Action Buttons -->
+          <div class="call-controls">
+            <button class="btn btn-primary" id="btnToggleMic">
+              <span id="micBtnIcon">🎙️</span>
+              <span id="micBtnText">Start Voice Call</span>
+            </button>
+            <button class="btn btn-warning" id="btnBargeIn" title="Test Barge-In / Natural Interruption">
+              <span>⚡</span> Barge-In (Interrupt AI)
+            </button>
+            <button class="btn btn-outline" id="btnToggleNoiseFilter">
+              <span>🛡️</span> Noise Filter: <strong id="noiseFilterStatus">ON</strong>
+            </button>
+            <button class="btn btn-danger" id="btnManualEscalate">
+              <span>👥</span> Escalate to Human
+            </button>
+            <button class="btn btn-outline" id="btnClearChat">
+              <span>🔄</span> Reset Session
+            </button>
+          </div>
+
+          <!-- Conversation Transcript Box -->
+          <div class="transcript-box" id="transcriptContainer" role="log" aria-live="polite">
+            <div class="transcript-message message-agent">
+              <div class="message-header">
+                <strong>🤖 VocaAI Support Agent</strong> • <span>System Welcome</span>
+              </div>
+              <div class="message-bubble">
+                Namaste! Welcome to Public & Non-Clinical Assistance Line. Aap Hindi ya English kisi me bhi baat kar sakte hain. How may I assist you today?
+              </div>
+              <div class="message-meta">
+                <span class="badge-tag">Multilingual / Hinglish Ready</span>
+                <span class="badge-tag">Confidence: 98%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat input fallback / simulator -->
+          <div class="chat-input-bar">
+            <input type="text" id="callerInputText" class="text-input" placeholder="Type message or Hinglish text (e.g., 'Mera naam Rohan hai, water pipe leak ho raha hai')..." />
+            <button class="btn btn-primary" id="btnSendMessage">Send</button>
+          </div>
+        </div>
+
+        <!-- Right Side: Structured Extraction, Safety Guardrails, & Escalation Card -->
+        <div class="side-panels">
+
+          <!-- Information Extraction Card -->
+          <div class="card">
+            <div class="section-header">
+              <h3 class="section-title">
+                <span>📋</span> Essential Information Extracted
+              </h3>
+              <span class="badge-tag" id="fieldsConfirmedCount">0 / 4 Confirmed</span>
+            </div>
+
+            <div class="field-list">
+              <div class="field-item">
+                <div class="field-label-group">
+                  <div class="field-label">Caller Name</div>
+                  <div class="field-value" id="valCallerName">Not provided yet</div>
+                </div>
+                <span class="field-status-badge status-missing" id="badgeCallerName">Missing</span>
+              </div>
+
+              <div class="field-item">
+                <div class="field-label-group">
+                  <div class="field-label">Callback Contact</div>
+                  <div class="field-value" id="valCallerPhone">Not provided yet</div>
+                </div>
+                <span class="field-status-badge status-missing" id="badgeCallerPhone">Missing</span>
+              </div>
+
+              <div class="field-item">
+                <div class="field-label-group">
+                  <div class="field-label">Incident Location</div>
+                  <div class="field-value" id="valCallerLocation">Not provided yet</div>
+                </div>
+                <span class="field-status-badge status-missing" id="badgeCallerLocation">Missing</span>
+              </div>
+
+              <div class="field-item">
+                <div class="field-label-group">
+                  <div class="field-label">Category & Urgency</div>
+                  <div class="field-value" id="valCategory">General Assistance (Normal)</div>
+                </div>
+                <span class="field-status-badge status-extracted" id="badgeCategory">Auto-Classified</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Safety Boundaries Card -->
+          <div class="card">
+            <div class="section-header">
+              <h3 class="section-title">
+                <span>🛡️</span> Safety Guardrail Boundaries
+              </h3>
+              <span class="guardrail-tag">Strict Enforcement</span>
+            </div>
+
+            <div class="guardrail-list">
+              <div class="guardrail-item">
+                <span>No Medical Diagnosis</span>
+                <span class="guardrail-tag">PROHIBITED</span>
+              </div>
+              <div class="guardrail-item">
+                <span>Emergency Responder Routing (112/108)</span>
+                <span class="guardrail-tag">ACTIVE ROUTE</span>
+              </div>
+              <div class="guardrail-item">
+                <span>No Authoritative Legal/Financial Advice</span>
+                <span class="guardrail-tag">PROHIBITED</span>
+              </div>
+              <div class="guardrail-item">
+                <span>Zero Hallucination / Fact Verification</span>
+                <span class="guardrail-tag">CONFIRMED ONLY</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context Preservation & Escalation Preview -->
+          <div class="card handover-card" id="escalationHandoverCard">
+            <div class="section-header">
+              <h3 class="section-title" style="color: #f87171;">
+                <span>🚨</span> Human Escalation Summary
+              </h3>
+              <span class="badge-priority-normal" id="handoverPriorityBadge">Ready for Dispatch</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted);">
+              When confidence drops or safety boundaries trigger, the AI compiles this instant handover package for human operators:
+            </p>
+            <div class="handover-summary-text" id="handoverSummaryContent">
+              No escalation triggered yet. The agent is calmly collecting and verifying caller information.
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 2: Case Management & Ticketing Dashboard -->
+    <section id="view-tickets" class="view-section">
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title" style="font-size: 20px;">
+              <span>📋</span> Supervisor Case Management & Escalation Queue
+            </h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+              Real-time feed of cases transferred from the AI agent with preserved context, severity ratings, and resolution tracking.
+            </p>
+          </div>
+          <button class="btn btn-outline" id="btnRefreshTickets">
+            <span>🔄</span> Refresh Queue
+          </button>
+        </div>
+
+        <div class="ticket-table-container" style="margin-top: 20px;">
+          <table class="ticket-table" id="ticketsTable">
+            <thead>
+              <tr>
+                <th>Ticket ID</th>
+                <th>Timestamp</th>
+                <th>Caller & Language</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th>Reason for Escalation</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ticketsTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: AI Video Voiceover Studio -->
+    <section id="view-video" class="view-section">
+      <div class="video-studio-grid">
+        
+        <!-- Video Player & Upload Card -->
+        <div class="card">
+          <div class="section-header">
+            <h2 class="section-title">
+              <span>🎬</span> Video Preview & Upload
+            </h2>
+            <button class="btn btn-secondary btn-sm" id="btnLoadSampleVideo">
+              <span>📽️</span> Load Demo Video
+            </button>
+          </div>
+
+          <div class="video-player-box" style="margin-top: 14px;">
+            <video id="previewVideo" controls playsinline></video>
+          </div>
+
+          <div class="video-dropzone" id="videoDropzone" style="margin-top: 16px;">
+            <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/quicktime" style="display: none;" />
+            <div style="font-size: 32px; margin-bottom: 8px;">📤</div>
+            <div style="font-weight: 600; font-size: 14px;">Drag & Drop Video or Click to Browse</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Supports MP4, WebM, MOV</div>
+            <div id="uploadedFileName" style="font-size: 12px; color: #22d3ee; margin-top: 6px; font-weight: 600;"></div>
+          </div>
+        </div>
+
+        <!-- Script Authoring & Voice Selection Card -->
+        <div class="card">
+          <div class="section-header">
+            <h2 class="section-title">
+              <span>🎙️</span> AI Voiceover Script & Neural Voices
+            </h2>
+            <span class="badge-tag" id="scriptWordCount">0 words</span>
+          </div>
+
+          <div class="form-group" style="margin-top: 12px;">
+            <label class="form-label" for="voiceoverScriptInput">Voiceover Script</label>
+            <textarea id="voiceoverScriptInput" class="script-editor-textarea" placeholder="Enter your multilingual script here... Example:
+Welcome to VocaAI Studio. In this presentation, we demonstrate seamless multilingual voice interactions combined with automated video voiceovers powered by Edge-TTS and FFmpeg."></textarea>
+          </div>
+
+          <div class="voice-selectors">
+            <div class="form-group">
+              <label class="form-label" for="selectVoice">Neural AI Voice</label>
+              <select id="selectVoice" class="select-input">
+                <option value="hi-IN-SwaraNeural">Swara (Hindi - India, Female)</option>
+                <option value="hi-IN-MadhurNeural">Madhur (Hindi - India, Male)</option>
+                <option value="en-IN-NeerjaNeural">Neerja (English - India, Female)</option>
+                <option value="en-IN-PrabhatNeural">Prabhat (English - India, Male)</option>
+                <option value="en-US-JennyNeural" selected>Jenny (English - US, Female)</option>
+                <option value="en-US-GuyNeural">Guy (English - US, Male)</option>
+                <option value="en-GB-SoniaNeural">Sonia (English - UK, Female)</option>
+                <option value="es-ES-ElviraNeural">Elvira (Spanish - Spain, Female)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="selectSpeechRate">Speech Rate</label>
+              <select id="selectSpeechRate" class="select-input">
+                <option value="-20%">Slow (-20%)</option>
+                <option value="+0%" selected>Normal (1.0x)</option>
+                <option value="+15%">Fast (+15%)</option>
+                <option value="+30%">Very Fast (+30%)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top: 14px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="chkKeepOriginalAudio" />
+            <label for="chkKeepOriginalAudio" style="font-size: 13px; color: var(--text-muted); cursor: pointer;">
+              Keep original video audio (ducked to 20% background volume)
+            </label>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn btn-primary" id="btnDubVideo" style="justify-content: center; padding: 14px;">
+              <span>⚡</span> Generate AI Voiceover & Merge with FFmpeg
+            </button>
+            <div id="dubbingProgressContainer" style="display: none; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; height: 6px;">
+              <div id="dubbingProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); transition: width 0.3s;"></div>
+            </div>
+            <a id="btnDownloadDubbedVideo" class="btn btn-secondary" style="display: none; justify-content: center; text-decoration: none;" download="dubbed_video.mp4">
+              <span>⬇️</span> Download Dubbed Video (.mp4)
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 4: Scenario Lab & Stress Simulator -->
+    <section id="view-scenarios" class="view-section">
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title" style="font-size: 20px;">
+              <span>🧪</span> Real-World Stress Test Bench & Scenario Simulator
+            </h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+              One-click testing presets to simulate stressed callers, code-switched Hindi-English, noisy environments, repetition/confirmation, and safety tripwires.
+            </p>
+          </div>
+        </div>
+
+        <div class="scenario-grid" style="margin-top: 20px;">
+          
+          <!-- Scenario 1 -->
+          <div class="scenario-card">
+            <div>
+              <span class="scenario-badge" style="background: rgba(99, 102, 241, 0.2); color: #818cf8;">Scenario 1</span>
+              <h3 style="font-size: 16px; margin: 8px 0 4px;">Hinglish Stressed Caller with Traffic Noise</h3>
+              <p class="scenario-desc">
+                Caller starts in Hindi: <em>"Bhaiya emergency help chahiye! Meri shop ke samne water main burst ho gaya hai and traffic bohot loud hai... please quickly note kar lijiye!"</em>
+              </p>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="app.runScenario('hinglish_noise')">
+              <span>▶</span> Run Hinglish Noise Test
+            </button>
+          </div>
+
+          <!-- Scenario 2 -->
+          <div class="scenario-card">
+            <div>
+              <span class="scenario-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">Scenario 2</span>
+              <h3 style="font-size: 16px; margin: 8px 0 4px;">Strict Medical Boundary Trigger</h3>
+              <p class="scenario-desc">
+                Caller asks: <em>"My chest is hurting very bad, is this a heart attack? Should I take aspirin or wait for my doctor?"</em>
+                Tests anti-diagnosis policy and 108/112 emergency routing.
+              </p>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="app.runScenario('medical_boundary')">
+              <span>▶</span> Run Medical Guardrail Test
+            </button>
+          </div>
+
+          <!-- Scenario 3 -->
+          <div class="scenario-card">
+            <div>
+              <span class="scenario-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">Scenario 3</span>
+              <h3 style="font-size: 16px; margin: 8px 0 4px;">Low-Confidence & Address Repetition Flow</h3>
+              <p class="scenario-desc">
+                Caller provides a muffled street name and phone number. Tests clarifying repetition requests, phone number read-back, and confidence tracking.
+              </p>
+            </div>
+            <button class="btn btn-warning btn-sm" onclick="app.runScenario('low_confidence_recovery')">
+              <span>▶</span> Run Low Confidence Test
+            </button>
+          </div>
+
+          <!-- Scenario 4 -->
+          <div class="scenario-card">
+            <div>
+              <span class="scenario-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Scenario 4</span>
+              <h3 style="font-size: 16px; margin: 8px 0 4px;">Fire & Emergency Responder Replacement</h3>
+              <p class="scenario-desc">
+                Caller reports active smoke: <em>"Building me heavy smoke aa raha hai floor 3 pe!"</em> Tests urgent dispatch advice and immediate priority-1 escalation.
+              </p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="app.runScenario('fire_emergency')">
+              <span>▶</span> Run Emergency Hazard Test
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Ambient Background Noise Generator / Mixer -->
+        <div style="margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+          <h3 style="font-size: 16px; font-weight: 700;">
+            <span>🔊</span> Background Noise Mixer (Inject Ambient Noise for Stress Testing)
+          </h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+            Synthesize realistic ambient environments (traffic, sirens, chatter) into the audio pipeline to test the agent's noise resilience and low-confidence recovery.
+          </p>
+
+          <div class="noise-mixer-grid">
+            <div class="noise-channel">
+              <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span>🚗 Street Traffic</span>
+                <span id="volTrafficText">0%</span>
+              </div>
+              <input type="range" min="0" max="100" value="0" class="slider-control" id="sliderTraffic" />
+            </div>
+
+            <div class="noise-channel">
+              <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span>🗣️ Crowd Chatter</span>
+                <span id="volCrowdText">0%</span>
+              </div>
+              <input type="range" min="0" max="100" value="0" class="slider-control" id="sliderCrowd" />
+            </div>
+
+            <div class="noise-channel">
+              <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span>🚨 Emergency Siren</span>
+                <span id="volSirenText">0%</span>
+              </div>
+              <input type="range" min="0" max="100" value="0" class="slider-control" id="sliderSiren" />
+            </div>
+
+            <div class="noise-channel">
+              <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span>☕ Cafe Ambience</span>
+                <span id="volCafeText">0%</span>
+              </div>
+              <input type="range" min="0" max="100" value="0" class="slider-control" id="sliderCafe" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 5: Architecture & Settings -->
+    <section id="view-architecture" class="view-section">
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title" style="font-size: 20px;">
+              <span>⚙️</span> System Architecture & Real-Time Pipeline
+            </h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+              Detailed breakdown of Agora Conversational AI, Deepgram STT, OpenAI LLM, MiniMax/Edge-TTS, and FFmpeg workflows.
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          
+          <div class="telemetry-item" style="padding: 16px;">
+            <div style="font-weight: 700; color: #22d3ee; margin-bottom: 6px;">1. Real-Time Transport</div>
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              <strong>Agora Conversational AI / WebRTC</strong><br>
+              Low-latency 2-way microphone channel, continuous audio streaming, and client-side barge-in detection.
+            </div>
+          </div>
+
+          <div class="telemetry-item" style="padding: 16px;">
+            <div style="font-weight: 700; color: #818cf8; margin-bottom: 6px;">2. Speech Recognition (STT)</div>
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              <strong>Deepgram Nova-2 / Web Speech</strong><br>
+              Multilingual & code-switching speech-to-text with confidence scores and endpointing.
+            </div>
+          </div>
+
+          <div class="telemetry-item" style="padding: 16px;">
+            <div style="font-weight: 700; color: #34d399; margin-bottom: 6px;">3. Intelligence & Guardrails</div>
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              <strong>OpenAI / Local Agent Engine</strong><br>
+              Information extraction (Name, Phone, Location), prioritized question flow, and hard safety guardrails.
+            </div>
+          </div>
+
+          <div class="telemetry-item" style="padding: 16px;">
+            <div style="font-weight: 700; color: #fbbf24; margin-bottom: 6px;">4. Neural Voice & Video</div>
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+              <strong>Edge-TTS + Static-FFmpeg</strong><br>
+              Natural neural voice playback in Hindi/English + automated audio-video multiplexing with volume ducking.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Optional API Configuration Modal / Form -->
+        <div style="margin-top: 28px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">Cloud Provider Credentials (Optional)</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            VocaAI Studio runs completely offline/out-of-the-box using the built-in neural Edge-TTS engine and local dialog manager. If you wish to connect your own live cloud services, you can enter your credentials below:
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="txtAgoraAppId">Agora App ID</label>
+              <input type="text" id="txtAgoraAppId" class="text-input" placeholder="e.g. 4a8b... (Optional)" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="txtDeepgramKey">Deepgram API Key</label>
+              <input type="password" id="txtDeepgramKey" class="text-input" placeholder="e.g. token... (Optional)" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="txtOpenAIKey">OpenAI API Key</label>
+              <input type="password" id="txtOpenAIKey" class="text-input" placeholder="e.g. sk-proj-... (Optional)" />
+            </div>
+          </div>
+          <button class="btn btn-outline" style="margin-top: 16px;" onclick="app.saveApiConfig()">
+            <span>💾</span> Save Configuration
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Audio Element for Agent Voice Playback -->
+  <audio id="agentAudioPlayer" style="display: none;"></audio>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
