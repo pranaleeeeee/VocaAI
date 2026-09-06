@@ -1,0 +1,72 @@
+warning: in the working copy of 'server/src/db/database.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/server/src/db/database.ts b/server/src/db/database.ts[m
+[1mindex cd1ce6d..73ae365 100644[m
+[1m--- a/server/src/db/database.ts[m
+[1m+++ b/server/src/db/database.ts[m
+[36m@@ -1,16 +1,46 @@[m
+ import initSqlJs, { Database } from "sql.js";[m
+ import fs from "fs";[m
+ import path from "path";[m
+[32m+[m[32mimport { fileURLToPath } from "url";[m
+ import { CaseRecord, CaseEvent, MessageRecord } from "../types/serverTypes.js";[m
+ [m
+[31m-const DB_PATH = path.resolve(process.cwd(), "vocaai.sqlite");[m
+[32m+[m[32m// In Vercel serverless, the filesystem is read-only except /tmp.[m
+[32m+[m[32m// Detect Vercel by checking VERCEL env var (set automatically by Vercel).[m
+[32m+[m[32mconst IS_SERVERLESS = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;[m
+[32m+[m[32mconst DB_PATH = IS_SERVERLESS[m
+[32m+[m[32m  ? path.join("/tmp", "vocaai.sqlite")[m
+[32m+[m[32m  : path.resolve(process.cwd(), "vocaai.sqlite");[m
+[32m+[m
+[32m+[m[32m// Resolve the sql.js WASM file explicitly so serverless runtimes can locate it.[m
+[32m+[m[32m// Try multiple candidate paths so it works both locally and in Vercel functions.[m
+[32m+[m[32mfunction resolveWasmPath(): string | undefined {[m
+[32m+[m[32m  const __filename = fileURLToPath(import.meta.url);[m
+[32m+[m[32m  const __dirname = path.dirname(__filename);[m
+[32m+[m[32m  const candidates = [[m
+[32m+[m[32m    path.join(__dirname, "..", "..", "..", "node_modules", "sql.js", "dist", "sql-wasm.wasm"),[m
+[32m+[m[32m    path.join(__dirname, "..", "..", "..", "..", "node_modules", "sql.js", "dist", "sql-wasm.wasm"),[m
+[32m+[m[32m    path.join(process.cwd(), "node_modules", "sql.js", "dist", "sql-wasm.wasm"),[m
+[32m+[m[32m    // server/node_modules fallback for local dev[m
+[32m+[m[32m    path.join(__dirname, "..", "..", "node_modules", "sql.js", "dist", "sql-wasm.wasm"),[m
+[32m+[m[32m  ];[m
+[32m+[m[32m  for (const c of candidates) {[m
+[32m+[m[32m    if (fs.existsSync(c)) return c;[m
+[32m+[m[32m  }[m
+[32m+[m[32m  return undefined;[m
+[32m+[m[32m}[m
+ [m
+ let dbInstance: Database | null = null;[m
+ [m
+ export async function getDb(): Promise<Database> {[m
+   if (dbInstance) return dbInstance;[m
+ [m
+[31m-  const SQL = await initSqlJs();[m
+[32m+[m[32m  const wasmPath = resolveWasmPath();[m
+[32m+[m[32m  const SQL = await initSqlJs([m
+[32m+[m[32m    wasmPath[m
+[32m+[m[32m      ? { wasmBinary: fs.readFileSync(wasmPath) }[m
+[32m+[m[32m      : {}[m
+[32m+[m[32m  );[m
+[32m+[m
+   if (fs.existsSync(DB_PATH)) {[m
+     const fileBuffer = fs.readFileSync(DB_PATH);[m
+     dbInstance = new SQL.Database(fileBuffer);[m
+[36m@@ -25,9 +55,14 @@[m [mexport async function getDb(): Promise<Database> {[m
+ [m
+ function saveDb() {[m
+   if (!dbInstance) return;[m
+[31m-  const data = dbInstance.export();[m
+[31m-  const buffer = Buffer.from(data);[m
+[31m-  fs.writeFileSync(DB_PATH, buffer);[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const data = dbInstance.export();[m
+[32m+[m[32m    const buffer = Buffer.from(data);[m
+[32m+[m[32m    fs.writeFileSync(DB_PATH, buffer);[m
+[32m+[m[32m  } catch (e) {[m
+[32m+[m[32m    // In serverless environments (Vercel), the filesystem may be read-only.[m
+[32m+[m[32m    // The DB remains valid in-memory for the duration of the function invocation.[m
+[32m+[m[32m  }[m
+ }[m
+ [m
+ function initSchema(db: Database) {[m
