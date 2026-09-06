@@ -127,10 +127,8 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
 
   // Safe start/restart recognition without throwing
   const safeStartRecognition = () => {
-    if (!isContinuousListeningRef.current) return;
-    if (isAiSpeakingRef.current) return;
-    if (isRecognitionRunningRef.current) return;
-
+    if (!isContinuousListeningRef.current || isAiSpeakingRef.current || isRecognitionRunningRef.current) return;
+    
     if (!recognitionRef.current) {
       recognitionRef.current = initSpeechRecognition();
     }
@@ -143,20 +141,11 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
       setIsMicActive(true);
       setIsListening(true);
     } catch (e: any) {
+      // If already started, just ignore. 
       if (e.name === "InvalidStateError") {
-        try { rec.abort(); } catch (_) {}
-        setTimeout(() => {
-          if (isContinuousListeningRef.current && !isAiSpeakingRef.current && !isRecognitionRunningRef.current) {
-            try {
-              const fresh = initSpeechRecognition();
-              recognitionRef.current = fresh;
-              fresh?.start();
-              isRecognitionRunningRef.current = true;
-              setIsMicActive(true);
-              setIsListening(true);
-            } catch (_) {}
-          }
-        }, 200);
+        isRecognitionRunningRef.current = true;
+      } else {
+        isRecognitionRunningRef.current = false;
       }
     }
   };
@@ -171,7 +160,8 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = sttLanguageRef.current || "en-US";
+    // en-IN strongly supports Hindi and English mixing (Hinglish)
+    recognition.lang = sttLanguageRef.current === "en-US" ? "en-IN" : sttLanguageRef.current;
 
     recognition.onstart = () => {
       isRecognitionRunningRef.current = true;
@@ -181,10 +171,7 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
 
     recognition.onresult = (event: any) => {
       const now = Date.now();
-      if (isAiSpeakingRef.current || now < aiSpeakingFinishedAtRef.current + 350) {
-        return;
-      }
-      if (isLoadingTurnRef.current) {
+      if (isAiSpeakingRef.current || now < aiSpeakingFinishedAtRef.current + 350 || isLoadingTurnRef.current) {
         return;
       }
 
@@ -213,16 +200,14 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
         setInputVal(combined);
         setInterimText("");
 
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-        }
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
+        // Reduced from 900ms to 400ms for snappier responses
         silenceTimerRef.current = setTimeout(() => {
           const textToSend = accumulatedTranscriptRef.current.trim();
           if (
             textToSend.length >= 2 &&
             !isAiSpeakingRef.current &&
-            Date.now() > aiSpeakingFinishedAtRef.current + 350 &&
             !isLoadingTurnRef.current
           ) {
             accumulatedTranscriptRef.current = "";
@@ -230,7 +215,7 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
             setInputVal("");
             handleSendTurn(textToSend);
           }
-        }, 900);
+        }, 400);
       }
     };
 
@@ -243,25 +228,15 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
         setIsListening(false);
       } else if (event.error === "network" || event.error === "no-speech") {
         isRecognitionRunningRef.current = false;
-        if (isContinuousListeningRef.current && !isAiSpeakingRef.current) {
-          setTimeout(() => {
-            safeStartRecognition();
-          }, 300);
-        }
+        // Do not rapidly restart on no-speech, let liveness timer handle it gracefully
+      } else {
+        isRecognitionRunningRef.current = false;
       }
     };
 
     recognition.onend = () => {
       isRecognitionRunningRef.current = false;
-      if (isContinuousListeningRef.current) {
-        if (!isAiSpeakingRef.current) {
-          setTimeout(() => {
-            if (isContinuousListeningRef.current && !isAiSpeakingRef.current && !isRecognitionRunningRef.current) {
-              safeStartRecognition();
-            }
-          }, 150);
-        }
-      } else {
+      if (!isContinuousListeningRef.current) {
         setIsMicActive(false);
         setIsListening(false);
       }
