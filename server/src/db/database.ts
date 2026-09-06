@@ -1,16 +1,46 @@
 import initSqlJs, { Database } from "sql.js";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { CaseRecord, CaseEvent, MessageRecord } from "../types/serverTypes.js";
 
-const DB_PATH = path.resolve(process.cwd(), "vocaai.sqlite");
+// In Vercel serverless, the filesystem is read-only except /tmp.
+// Detect Vercel by checking VERCEL env var (set automatically by Vercel).
+const IS_SERVERLESS = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const DB_PATH = IS_SERVERLESS
+  ? path.join("/tmp", "vocaai.sqlite")
+  : path.resolve(process.cwd(), "vocaai.sqlite");
+
+// Resolve the sql.js WASM file explicitly so serverless runtimes can locate it.
+// Try multiple candidate paths so it works both locally and in Vercel functions.
+function resolveWasmPath(): string | undefined {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const candidates = [
+    path.join(__dirname, "..", "..", "..", "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+    path.join(__dirname, "..", "..", "..", "..", "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+    path.join(process.cwd(), "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+    // server/node_modules fallback for local dev
+    path.join(__dirname, "..", "..", "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return undefined;
+}
 
 let dbInstance: Database | null = null;
 
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
 
-  const SQL = await initSqlJs();
+  const wasmPath = resolveWasmPath();
+  const SQL = await initSqlJs(
+    wasmPath
+      ? { wasmBinary: fs.readFileSync(wasmPath) }
+      : {}
+  );
+
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
     dbInstance = new SQL.Database(fileBuffer);
@@ -25,9 +55,14 @@ export async function getDb(): Promise<Database> {
 
 function saveDb() {
   if (!dbInstance) return;
-  const data = dbInstance.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
+  try {
+    const data = dbInstance.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+  } catch (e) {
+    // In serverless environments (Vercel), the filesystem may be read-only.
+    // The DB remains valid in-memory for the duration of the function invocation.
+  }
 }
 
 function initSchema(db: Database) {
