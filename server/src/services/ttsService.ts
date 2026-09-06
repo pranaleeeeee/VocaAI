@@ -2,9 +2,18 @@ import { exec } from "child_process";
 import path from "path";
 import fs from "fs";
 
-const MEDIA_CACHE_DIR = path.resolve(process.cwd(), "media_cache");
-if (!fs.existsSync(MEDIA_CACHE_DIR)) {
-  fs.mkdirSync(MEDIA_CACHE_DIR, { recursive: true });
+// In Vercel serverless, /var/task is read-only. Only /tmp is writable.
+// Locally, use media_cache/ relative to cwd (unchanged behaviour).
+const MEDIA_CACHE_DIR = process.env.VERCEL
+  ? "/tmp/media_cache"
+  : path.resolve(process.cwd(), "media_cache");
+
+// Directory is created lazily inside synthesize() so a missing directory
+// never crashes the process during module import / serverless cold-start.
+function ensureMediaCacheDir(): void {
+  if (!fs.existsSync(MEDIA_CACHE_DIR)) {
+    fs.mkdirSync(MEDIA_CACHE_DIR, { recursive: true });
+  }
 }
 
 export class TtsService {
@@ -17,6 +26,9 @@ export class TtsService {
     rate: string = "+0%",
     pitch: string = "+0Hz"
   ): Promise<string> {
+    // Ensure the output directory exists before writing (lazy + safe).
+    ensureMediaCacheDir();
+
     const filename = `tts_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.mp3`;
     const outputPath = path.join(MEDIA_CACHE_DIR, filename);
 
@@ -44,3 +56,4 @@ export class TtsService {
     });
   }
 }
+

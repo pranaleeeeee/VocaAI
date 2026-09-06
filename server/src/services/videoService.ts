@@ -3,12 +3,20 @@ import path from "path";
 import fs from "fs";
 import { TtsService } from "./ttsService.js";
 
-const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
-const OUTPUT_DIR = path.resolve(process.cwd(), "output");
+// In Vercel serverless, /var/task is read-only; only /tmp is writable.
+// Locally, use the cwd-relative paths (unchanged behaviour).
+const IS_SERVERLESS = !!process.env.VERCEL;
+const UPLOADS_DIR = IS_SERVERLESS ? "/tmp/uploads" : path.resolve(process.cwd(), "uploads");
+const OUTPUT_DIR  = IS_SERVERLESS ? "/tmp/output"  : path.resolve(process.cwd(), "output");
 
-[UPLOADS_DIR, OUTPUT_DIR].forEach((d) => {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-});
+// Lazy directory creation — called only when a job actually starts,
+// never at import time, so module load never crashes in serverless.
+function ensureJobDirs(): void {
+  [UPLOADS_DIR, OUTPUT_DIR].forEach((d) => {
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  });
+}
+
 
 export type VideoJobStatus = "Uploading" | "Processing" | "Generating Voice" | "Merging Audio" | "Completed" | "Failed";
 
@@ -38,6 +46,9 @@ export class VideoService {
     pitch: string = "+0Hz",
     keepOriginalAudio: boolean = false
   ): Promise<VideoJob> {
+    // Ensure writable directories exist before any file I/O (lazy + safe).
+    ensureJobDirs();
+
     const inputExt = path.extname(videoFile.originalname) || ".mp4";
     const inputVideoPath = path.join(UPLOADS_DIR, `in_${jobId}${inputExt}`);
     const outputVideoPath = path.join(OUTPUT_DIR, `dubbed_${jobId}.mp4`);
