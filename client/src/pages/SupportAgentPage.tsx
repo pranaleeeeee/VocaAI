@@ -395,9 +395,16 @@ export const SupportAgentPage: React.FC<SupportAgentPageProps> = ({ mode, onView
         }
       }
     } catch (err: any) {
-      console.error("Turn error:", err);
+      const errorMsg = err?.message || "Connection error";
+      console.error("[VocaAI Turn Error]", {
+        endpoint: "/api/conversation/turn",
+        conversationId,
+        error: errorMsg,
+        type: err?.name || "Error",
+        timestamp: new Date().toISOString()
+      });
       const fallbackReply = "I ran into a brief connection issue, but I'm still listening. How can I help you?";
-      setErrorMessage(err.message || "Connection error. Please try again.");
+      setErrorMessage(errorMsg);
 
       const agentMsg: MessageItem = {
         id: `msg_${Date.now() + 1}`,
